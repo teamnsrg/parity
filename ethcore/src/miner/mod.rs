@@ -56,7 +56,7 @@ pub use self::miner::{Miner, MinerOptions, Banning, PendingSet, GasPricer, GasPr
 pub use self::transaction_queue::{TransactionQueue, RemovalReason, TransactionDetailsProvider as TransactionQueueDetailsProvider,
 	PrioritizationStrategy, AccountDetails, TransactionOrigin};
 pub use self::local_transactions::{Status as LocalTransactionStatus};
-pub use client::TransactionImportResult;
+pub use client::{TransactionImportResult, Nonce, Balance, BlockInfo, ChainInfo, TransactionInfo, RegistryInfo, CallContract, PrepareOpenBlock, ReopenBlock};
 pub use self::work_notify::NotifyWork;
 pub use self::stratum::{Stratum, Error as StratumError, Options as StratumOptions};
 
@@ -122,8 +122,9 @@ pub trait MinerService : Send + Sync {
 	fn set_tx_gas_limit(&self, limit: U256);
 
 	/// Imports transactions to transaction queue.
-	fn import_external_transactions(&self, chain: &MiningBlockChainClient, transactions: Vec<UnverifiedTransaction>) ->
-		Vec<Result<TransactionImportResult, Error>>;
+	fn import_external_transactions<C>(&self, client: &C, transactions: Vec<UnverifiedTransaction>) ->
+		Vec<Result<TransactionImportResult, Error>>
+		where C: Nonce + Balance + BlockInfo + ChainInfo + TransactionInfo + RegistryInfo + CallContract;
 
 	/// Imports own (node owner) transaction to queue.
 	fn import_own_transaction(&self, chain: &MiningBlockChainClient, transaction: PendingTransaction) ->
@@ -142,15 +143,18 @@ pub trait MinerService : Send + Sync {
 	fn can_produce_work_package(&self) -> bool;
 
 	/// New chain head event. Restart mining operation.
-	fn update_sealing(&self, chain: &MiningBlockChainClient);
+	fn update_sealing<C>(&self, chain: &C)
+		where C: Nonce + Balance + BlockInfo + ChainInfo + TransactionInfo + RegistryInfo + CallContract + PrepareOpenBlock + ReopenBlock;
 
 	/// Submit `seal` as a valid solution for the header of `pow_hash`.
 	/// Will check the seal, but not actually insert the block into the chain.
 	fn submit_seal(&self, chain: &MiningBlockChainClient, pow_hash: H256, seal: Vec<Bytes>) -> Result<(), Error>;
 
 	/// Get the sealing work package and if `Some`, apply some transform.
-	fn map_sealing_work<F, T>(&self, chain: &MiningBlockChainClient, f: F) -> Option<T>
-		where F: FnOnce(&ClosedBlock) -> T, Self: Sized;
+	fn map_sealing_work<C, F, T>(&self, client: &C, f: F) -> Option<T>
+		where C: Nonce + ChainInfo + PrepareOpenBlock + ReopenBlock,
+		      F: FnOnce(&ClosedBlock) -> T,
+			  Self: Sized;
 
 	/// Query pending transactions for hash.
 	fn transaction(&self, best_block: BlockNumber, hash: &H256) -> Option<PendingTransaction>;
