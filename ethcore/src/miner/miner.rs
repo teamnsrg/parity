@@ -27,8 +27,8 @@ use timer::PerfTimer;
 use using_queue::{UsingQueue, GetAction};
 use account_provider::{AccountProvider, SignError as AccountError};
 use state::State;
-use client::{MiningBlockChainClient, Nonce, Balance, BlockInfo, ChainInfo, TransactionInfo, CallContract, RegistryInfo, PrepareOpenBlock, ReopenBlock, BlockId, TransactionId};
-use client::TransactionImportResult;
+use client::{Nonce, Balance, BlockInfo, ChainInfo, TransactionInfo, CallContract, RegistryInfo, PrepareOpenBlock, ReopenBlock, ScheduleInfo};
+use client::{BlockId, TransactionId, MiningBlockChainClient, TransactionImportResult};
 use executive::contract_address;
 use block::{ClosedBlock, IsBlock, Block};
 use error::*;
@@ -648,7 +648,7 @@ impl Miner {
 		prepare_new
 	}
 
-	fn add_transactions_to_queue<C: Nonce + Balance + BlockInfo + ChainInfo + TransactionInfo + CallContract + RegistryInfo>(
+	fn add_transactions_to_queue<C: Nonce + Balance + BlockInfo + ChainInfo + TransactionInfo + CallContract + RegistryInfo + ScheduleInfo>(
 		&self,
 		client: &C,
 		transactions: Vec<UnverifiedTransaction>,
@@ -1234,7 +1234,7 @@ impl<'a, C> TransactionDetailsProvider<'a, C> {
 	}
 }
 
-impl<'a, C: Nonce + Balance + CallContract + RegistryInfo> TransactionQueueDetailsProvider for TransactionDetailsProvider<'a, C> {
+impl<'a, C: Nonce + Balance + CallContract + RegistryInfo + ScheduleInfo> TransactionQueueDetailsProvider for TransactionDetailsProvider<'a, C> {
 	fn fetch_account(&self, address: &Address) -> AccountDetails {
 		AccountDetails {
 			nonce: self.client.latest_nonce(address),
@@ -1243,8 +1243,7 @@ impl<'a, C: Nonce + Balance + CallContract + RegistryInfo> TransactionQueueDetai
 	}
 
 	fn estimate_gas_required(&self, tx: &SignedTransaction) -> U256 {
-		// TODO tx.gas_required(&self.client.latest_schedule()).into()
-		0.into()
+		tx.gas_required(&self.client.latest_schedule()).into()
 	}
 
 	fn is_service_transaction_acceptable(&self, tx: &SignedTransaction) -> Result<bool, String> {
