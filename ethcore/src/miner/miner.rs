@@ -605,7 +605,7 @@ impl Miner {
 		}
 	}
 
-	fn update_gas_limit(&self, client: &MiningBlockChainClient) {
+	fn update_gas_limit<C: BlockInfo>(&self, client: &C) {
 		let gas_limit = client.best_block_header().gas_limit();
 		let mut queue = self.transaction_queue.write();
 		queue.set_gas_limit(gas_limit);
@@ -724,7 +724,7 @@ const SEALING_TIMEOUT_IN_BLOCKS : u64 = 5;
 
 impl MinerService for Miner {
 
-	fn clear_and_reset(&self, chain: &MiningBlockChainClient) {
+	fn clear_and_reset<C: MiningBlockChainClient>(&self, chain: &C) {
 		self.transaction_queue.write().clear();
 		// --------------------------------------------------------------------------
 		// | NOTE Code below requires transaction_queue and sealing_work locks.     |
@@ -840,7 +840,7 @@ impl MinerService for Miner {
 		self.gas_range_target.read().1
 	}
 
-	fn import_external_transactions<C: Nonce + Balance + BlockInfo + ChainInfo + TransactionInfo + CallContract + RegistryInfo>(
+	fn import_external_transactions<C: MiningBlockChainClient>(
 		&self,
 		client: &C,
 		transactions: Vec<UnverifiedTransaction>
@@ -864,9 +864,9 @@ impl MinerService for Miner {
 	}
 
 	#[cfg_attr(feature="dev", allow(collapsible_if))]
-	fn import_own_transaction(
+	fn import_own_transaction<C: MiningBlockChainClient>(
 		&self,
-		chain: &MiningBlockChainClient,
+		chain: &C,
 		pending: PendingTransaction,
 	) -> Result<TransactionImportResult, Error> {
 
@@ -1061,7 +1061,7 @@ impl MinerService for Miner {
 	/// Update sealing if required.
 	/// Prepare the block and work if the Engine does not seal internally.
 	fn update_sealing<C>(&self, chain: &C) 
-		where C: Nonce + Balance + BlockInfo + ChainInfo + TransactionInfo + RegistryInfo + CallContract + PrepareOpenBlock + ReopenBlock
+		where C: Nonce + Balance + BlockInfo + ChainInfo + TransactionInfo + RegistryInfo + CallContract + PrepareOpenBlock + ReopenBlock + MiningBlockChainClient
 	{
 		trace!(target: "miner", "update_sealing");
 		const NO_NEW_CHAIN_WITH_FORKS: &str = "Your chain specification contains one or more hard forks which are required to be \
@@ -1143,7 +1143,9 @@ impl MinerService for Miner {
 		})
 	}
 
-	fn chain_new_blocks(&self, chain: &MiningBlockChainClient, imported: &[H256], _invalid: &[H256], enacted: &[H256], retracted: &[H256]) {
+	fn chain_new_blocks<C>(&self, chain: &C, imported: &[H256], _invalid: &[H256], enacted: &[H256], retracted: &[H256]) 
+		where C: Nonce + Balance + BlockInfo + ChainInfo + TransactionInfo + CallContract + RegistryInfo + ReopenBlock + PrepareOpenBlock + MiningBlockChainClient
+	{
 		trace!(target: "miner", "chain_new_blocks");
 
 		// 1. We ignore blocks that were `imported` unless resealing on new uncles is enabled.

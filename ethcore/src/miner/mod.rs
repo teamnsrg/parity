@@ -122,29 +122,29 @@ pub trait MinerService : Send + Sync {
 	fn set_tx_gas_limit(&self, limit: U256);
 
 	/// Imports transactions to transaction queue.
-	fn import_external_transactions<C>(&self, client: &C, transactions: Vec<UnverifiedTransaction>) ->
-		Vec<Result<TransactionImportResult, Error>>
-		where C: Nonce + Balance + BlockInfo + ChainInfo + TransactionInfo + RegistryInfo + CallContract;
+	fn import_external_transactions<C: MiningBlockChainClient>(&self, client: &C, transactions: Vec<UnverifiedTransaction>) -> 
+		Vec<Result<TransactionImportResult, Error>>;
 
 	/// Imports own (node owner) transaction to queue.
-	fn import_own_transaction(&self, chain: &MiningBlockChainClient, transaction: PendingTransaction) ->
+	fn import_own_transaction<C: MiningBlockChainClient>(&self, chain: &C, transaction: PendingTransaction) -> 
 		Result<TransactionImportResult, Error>;
 
 	/// Returns hashes of transactions currently in pending
 	fn pending_transactions_hashes(&self, best_block: BlockNumber) -> Vec<H256>;
 
 	/// Removes all transactions from the queue and restart mining operation.
-	fn clear_and_reset(&self, chain: &MiningBlockChainClient);
+	fn clear_and_reset<C: MiningBlockChainClient>(&self, chain: &C);
 
 	/// Called when blocks are imported to chain, updates transactions queue.
-	fn chain_new_blocks(&self, chain: &MiningBlockChainClient, imported: &[H256], invalid: &[H256], enacted: &[H256], retracted: &[H256]);
+	fn chain_new_blocks<C>(&self, chain: &C, imported: &[H256], invalid: &[H256], enacted: &[H256], retracted: &[H256])
+		where C: Nonce + Balance + BlockInfo + ChainInfo + TransactionInfo + CallContract + RegistryInfo + ReopenBlock + PrepareOpenBlock + MiningBlockChainClient;
 
 	/// PoW chain - can produce work package
 	fn can_produce_work_package(&self) -> bool;
 
 	/// New chain head event. Restart mining operation.
 	fn update_sealing<C>(&self, chain: &C)
-		where C: Nonce + Balance + BlockInfo + ChainInfo + TransactionInfo + RegistryInfo + CallContract + PrepareOpenBlock + ReopenBlock;
+		where C: Nonce + Balance + BlockInfo + ChainInfo + TransactionInfo + RegistryInfo + CallContract + PrepareOpenBlock + ReopenBlock + MiningBlockChainClient;
 
 	/// Submit `seal` as a valid solution for the header of `pow_hash`.
 	/// Will check the seal, but not actually insert the block into the chain.
