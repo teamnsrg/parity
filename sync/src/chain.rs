@@ -602,7 +602,7 @@ impl ChainSync {
 	#[cfg_attr(feature="dev", allow(cyclomatic_complexity, needless_borrow))]
 	/// Called by peer once it has new block headers during sync
 	fn on_peer_block_headers(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &UntrustedRlp) -> Result<(), PacketDecodeError> {
-		trace!(target: "sync", "<<ETH_BLOCK_HEADERS {} -> BlockHeaders", peer_id);
+		debug!(target: "sync", "<<ETH_BLOCK_HEADERS {}:{}", peer_id, io.peer_info(peer_id));
 		let confirmed = match self.peers.get_mut(&peer_id) {
 			Some(ref mut peer) if peer.asking == PeerAsking::ForkHeader => {
 				peer.asking = PeerAsking::Nothing;
@@ -704,7 +704,7 @@ impl ChainSync {
 
 	/// Called by peer once it has new block bodies
 	fn on_peer_block_bodies(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &UntrustedRlp) -> Result<(), PacketDecodeError> {
-		debug!(target: "sync", "<<ETH_BLOCK_BODIES {}", peer_id);
+		debug!(target: "sync", "<<ETH_BLOCK_BODIES {}:{}", peer_id, io.peer_info(peer_id));
 		self.clear_peer_download(peer_id);
 		let block_set = self.peers.get(&peer_id).and_then(|p| p.block_set).unwrap_or(BlockSet::NewBlocks);
 		if !self.reset_peer_asking(peer_id, PeerAsking::BlockBodies) {
@@ -759,7 +759,7 @@ impl ChainSync {
 
 	/// Called by peer once it has new block receipts
 	fn on_peer_block_receipts(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &UntrustedRlp) -> Result<(), PacketDecodeError> {
-		debug!(target: "sync", "<<ETH_RECEIPTS {}", peer_id);
+		debug!(target: "sync", "<<ETH_RECEIPTS {}:{}", peer_id, io.peer_info(peer_id));
 		self.clear_peer_download(peer_id);
 		let block_set = self.peers.get(&peer_id).and_then(|p| p.block_set).unwrap_or(BlockSet::NewBlocks);
 		if !self.reset_peer_asking(peer_id, PeerAsking::BlockReceipts) {
@@ -815,7 +815,7 @@ impl ChainSync {
 	/// Called by peer once it has new block bodies
 	#[cfg_attr(feature="dev", allow(cyclomatic_complexity))]
 	fn on_peer_new_block(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &UntrustedRlp) -> Result<(), PacketDecodeError> {
-		debug!(target: "sync", "<<ETH_NEW_BLOCK {}", peer_id);
+		debug!(target: "sync", "<<ETH_NEW_BLOCK {}:{}", peer_id, io.peer_info(peer_id));
 		if !self.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
 			trace!(target: "sync", "Ignoring new block from unconfirmed peer {}", peer_id);
 			return Ok(());
@@ -909,8 +909,8 @@ impl ChainSync {
 			self.sync_start_time = Some(time::precise_time_ns());
 		}
 
-		debug!(target: "sync", "<<ETH_STATUS {} (protocol: {}, network: {:?}, difficulty: {:?}, latest:{}, genesis:{}, snapshot:{:?})",
-			   peer_id, peer.protocol_version, peer.network_id, peer.difficulty, peer.latest_hash, peer.genesis, peer.snapshot_number);
+		debug!(target: "sync", "<<ETH_STATUS {}:{}: (protocol: {}, network: {:?}, difficulty: {:?}, latest:{}, genesis:{}, snapshot:{:?})",
+			   peer_id, io.peer_info(peer_id), peer.protocol_version, peer.network_id, peer.difficulty, peer.latest_hash, peer.genesis, peer.snapshot_number);
 		if io.is_expired() {
 			trace!(target: "sync", "Status packet from expired session {}:{}", peer_id, io.peer_info(peer_id));
 			return Ok(());
@@ -942,7 +942,7 @@ impl ChainSync {
 		// Let the current sync round complete first.
 		self.active_peers.insert(peer_id.clone());
 		debug!(target: "sync", "Connected {}:{}", peer_id, io.peer_info(peer_id));
-		debug!(target: "sync", "Peers {}| Active peers {}", self.peers.len(), self.active_peers.len())
+		debug!(target: "sync", "Peers {}| Active peers {}", self.peers.len(), self.active_peers.len());
 		if let Some((fork_block, _)) = self.fork_block {
 			self.request_fork_header_by_number(io, peer_id, fork_block);
 		} else {
@@ -953,7 +953,7 @@ impl ChainSync {
 
 	/// Handles `NewHashes` packet. Initiates headers download for any unknown hashes.
 	fn on_peer_new_hashes(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &UntrustedRlp) -> Result<(), PacketDecodeError> {
-		debug!(target: "sync", "<<ETH_NEW_BLOCK_HASHES {} -> NewHashes ({} entries)", peer_id, r.item_count()?);
+		debug!(target: "sync", "<<ETH_NEW_BLOCK_HASHES {}:{} -> NewHashes ({} entries)", peer_id, io.peer_info(peer_id), r.item_count()?);
 
 		if !self.peers.get(&peer_id).map_or(false, |p| p.can_sync()) {
 			trace!(target: "sync", "Ignoring new hashes from unconfirmed peer {}", peer_id);
@@ -1359,7 +1359,7 @@ impl ChainSync {
 	/// Request headers from a peer by block hash
 	#[cfg_attr(feature="dev", allow(too_many_arguments))]
 	fn request_headers_by_hash(&mut self, sync: &mut SyncIo, peer_id: PeerId, h: &H256, count: u64, skip: u64, reverse: bool, set: BlockSet) {
-		debug!(target: "sync", ">>ETH_GET_BLOCK_HEADERS {} <- GetBlockHeaders: {} entries starting from {}, set = {:?}", peer_id, count, h, set);
+		debug!(target: "sync", ">>ETH_GET_BLOCK_HEADERS {}:{} <- GetBlockHeaders: {} entries starting from {}, set = {:?}", peer_id, sync.peer_info(peer_id), count, h, set);
 		let mut rlp = RlpStream::new_list(4);
 		rlp.append(h);
 		rlp.append(&count);
@@ -1374,7 +1374,7 @@ impl ChainSync {
 	/// Request headers from a peer by block number
 	#[cfg_attr(feature="dev", allow(too_many_arguments))]
 	fn request_fork_header_by_number(&mut self, sync: &mut SyncIo, peer_id: PeerId, n: BlockNumber) {
-		debug!(target: "sync", ">>ETH_GET_BLOCK_HEADERS {} <- GetForkHeader: at {}", peer_id, n);
+		debug!(target: "sync", ">>ETH_GET_BLOCK_HEADERS {}:{} <- GetForkHeader: at {}", peer_id, sync.peer_info(peer_id), n);
 		let mut rlp = RlpStream::new_list(4);
 		rlp.append(&n);
 		rlp.append(&1u32);
@@ -1401,7 +1401,7 @@ impl ChainSync {
 	/// Request block bodies from a peer
 	fn request_bodies(&mut self, sync: &mut SyncIo, peer_id: PeerId, hashes: Vec<H256>, set: BlockSet) {
 		let mut rlp = RlpStream::new_list(hashes.len());
-		debug!(target: "sync", ">>ETH_GET_BLOCK_BODIES {} <- GetBlockBodies: {} entries starting from {:?}, set = {:?}", peer_id, hashes.len(), hashes.first(), set);
+		debug!(target: "sync", ">>ETH_GET_BLOCK_BODIES {}:{} <- GetBlockBodies: {} entries starting from {:?}, set = {:?}", peer_id, sync.peer_info(peer_id), hashes.len(), hashes.first(), set);
 		for h in &hashes {
 			rlp.append(&h.clone());
 		}
@@ -1414,7 +1414,7 @@ impl ChainSync {
 	/// Request block receipts from a peer
 	fn request_receipts(&mut self, sync: &mut SyncIo, peer_id: PeerId, hashes: Vec<H256>, set: BlockSet) {
 		let mut rlp = RlpStream::new_list(hashes.len());
-		debug!(target: "sync", ">>ETH_GET_RECEIPTS {} <- GetBlockReceipts: {} entries starting from {:?}, set = {:?}", peer_id, hashes.len(), hashes.first(), set);
+		debug!(target: "sync", ">>ETH_GET_RECEIPTS {}:{} <- GetBlockReceipts: {} entries starting from {:?}, set = {:?}", peer_id, sync.peer_info(peer_id), hashes.len(), hashes.first(), set);
 		for h in &hashes {
 			rlp.append(&h.clone());
 		}
@@ -1471,7 +1471,7 @@ impl ChainSync {
 
 	/// Called when peer sends us new transactions
 	fn on_peer_transactions(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &UntrustedRlp) -> Result<(), PacketDecodeError> {
-		debug!(target: "sync", "<<ETH_TXNS {} -> Transactions", peer_id);
+		debug!(target: "sync", "<<ETH_TXNS {}:{}", peer_id, io.peer_info(peer_id));
 		// Accept transactions only when fully synced
 		if !io.is_chain_queue_empty() || (self.state != SyncState::Idle && self.state != SyncState::NewBlocks) {
 			trace!(target: "sync", "{} Ignoring transactions while syncing", peer_id);
@@ -1503,7 +1503,7 @@ impl ChainSync {
 		let warp_protocol_version = io.protocol_version(&WARP_SYNC_PROTOCOL_ID, peer);
 		let warp_protocol = warp_protocol_version != 0;
 		let protocol = if warp_protocol { warp_protocol_version } else { PROTOCOL_VERSION_63 };
-		debug!(target: "sync", ">>ETH_STATUS {}, protocol version {}", peer, protocol);
+		debug!(target: "sync", ">>ETH_STATUS {}:{}, protocol version {}", peer, io.peer_info(peer), protocol);
 		let mut packet = RlpStream::new_list(if warp_protocol { 7 } else { 5 });
 		let chain = io.chain().chain_info();
 		packet.append(&(protocol as u32));
@@ -1535,7 +1535,7 @@ impl ChainSync {
 		let number = if r.at(0)?.size() == 32 {
 			// id is a hash
 			let hash: H256 = r.val_at(0)?;
-			debug!(target: "sync", "<<ETH_GET_BLOCK_HEADERS {} -> GetBlockHeaders (hash: {}, max: {}, skip: {}, reverse:{})", peer_id, hash, max_headers, skip, reverse);
+			debug!(target: "sync", "<<ETH_GET_BLOCK_HEADERS {}:{} -> GetBlockHeaders (hash: {}, max: {}, skip: {}, reverse:{})", peer_id, io.peer_info(peer_id), hash, max_headers, skip, reverse);
 			match io.chain().block_header(BlockId::Hash(hash)) {
 				Some(hdr) => {
 					let number = hdr.number().into();
@@ -1544,7 +1544,7 @@ impl ChainSync {
 					if max_headers == 1 || io.chain().block_hash(BlockId::Number(number)) != Some(hash) {
 						// Non canonical header or single header requested
 						// TODO: handle single-step reverse hashchains of non-canon hashes
-						debug!(target:"sync", ">>ETH_BLOCK_HEADERS  {}", peer_id);
+						debug!(target:"sync", ">>ETH_BLOCK_HEADERS  {}:{}", peer_id, io.peer_info(peer_id));
 						let mut rlp = RlpStream::new_list(1);
 						rlp.append_raw(&hdr.into_inner(), 1);
 						return Ok(Some((BLOCK_HEADERS_PACKET, rlp)));
@@ -1555,7 +1555,7 @@ impl ChainSync {
 				None => return Ok(Some((BLOCK_HEADERS_PACKET, RlpStream::new_list(0)))) //no such header, return nothing
 			}
 		} else {
-			trace!(target: "sync", "<<ETH_GET_BLOCK_HEADERS {} -> GetBlockHeaders (number: {}, max: {}, skip: {}, reverse:{})", peer_id, r.val_at::<BlockNumber>(0)?, max_headers, skip, reverse);
+			debug!(target: "sync", "<<ETH_GET_BLOCK_HEADERS {}:{} -> GetBlockHeaders (number: {}, max: {}, skip: {}, reverse:{})", peer_id, io.peer_info(peer_id), r.val_at::<BlockNumber>(0)?, max_headers, skip, reverse);
 			r.val_at(0)?
 		};
 
@@ -1594,13 +1594,13 @@ impl ChainSync {
 		}
 		let mut rlp = RlpStream::new_list(count as usize);
 		rlp.append_raw(&data, count as usize);
-		debug!(target: "sync", ">>ETH_BLOCK_HEADERS {} -> GetBlockHeaders: returned {} entries", peer_id, count);
+		debug!(target: "sync", ">>ETH_BLOCK_HEADERS {}:{} -> GetBlockHeaders: returned {} entries", peer_id, io.peer_info(peer_id), count);
 		Ok(Some((BLOCK_HEADERS_PACKET, rlp)))
 	}
 
 	/// Respond to GetBlockBodies request
 	fn return_block_bodies(io: &SyncIo, r: &UntrustedRlp, peer_id: PeerId) -> RlpResponseResult {
-		debug!(target: "sync", "<<ETH_GET_BLOCK_BODIES {}", peer_id);
+		debug!(target: "sync", "<<ETH_GET_BLOCK_BODIES {}:{}", peer_id, io.peer_info(peer_id));
 		let mut count = r.item_count().unwrap_or(0);
 		if count == 0 {
 			debug!(target: "sync", "Empty GetBlockBodies request, ignoring.");
@@ -1617,14 +1617,14 @@ impl ChainSync {
 		}
 		let mut rlp = RlpStream::new_list(added);
 		rlp.append_raw(&data, added);
-		debug!(target: "sync", ">>ETH_BLOCK_BODIES {} -> GetBlockBodies: returned {} entries", peer_id, added);
+		debug!(target: "sync", ">>ETH_BLOCK_BODIES {}:{} -> GetBlockBodies: returned {} entries", peer_id, io.peer_info(peer_id), added);
 		Ok(Some((BLOCK_BODIES_PACKET, rlp)))
 	}
 
 	/// Respond to GetNodeData request
 	fn return_node_data(io: &SyncIo, r: &UntrustedRlp, peer_id: PeerId) -> RlpResponseResult {
 		let mut count = r.item_count().unwrap_or(0);
-		debug!(target: "sync", "<<ETH_GET_NODE_DATA {} -> GetNodeData: {} entries", peer_id, count);
+		debug!(target: "sync", "<<ETH_GET_NODE_DATA {}:{} -> GetNodeData: {} entries", peer_id, io.peer_info(peer_id), count);
 		if count == 0 {
 			debug!(target: "sync", "Empty GetNodeData request, ignoring.");
 			return Ok(None);
@@ -1638,7 +1638,7 @@ impl ChainSync {
 				added += 1;
 			}
 		}
-		debug!(target: "sync", ">>ETH_NODE_DATA {} -> GetNodeData: return {} entries", peer_id, added);
+		debug!(target: "sync", ">>ETH_NODE_DATA {}:{} -> GetNodeData: return {} entries", peer_id, io.peer_info(peer_id), added);
 		let mut rlp = RlpStream::new_list(added);
 		for d in data {
 			rlp.append(&d);
@@ -1648,7 +1648,7 @@ impl ChainSync {
 
 	fn return_receipts(io: &SyncIo, rlp: &UntrustedRlp, peer_id: PeerId) -> RlpResponseResult {
 		let mut count = rlp.item_count().unwrap_or(0);
-		debug!(target: "sync", "<<ETH_GET_RECEIPTS {} -> GetReceipts: {} entries", peer_id, count);
+		debug!(target: "sync", "<<ETH_GET_RECEIPTS {}:{} -> GetReceipts: {} entries", peer_id, io.peer_info(peer_id), count);
 		if count == 0 {
 			debug!(target: "sync", "Empty GetReceipts request, ignoring.");
 			return Ok(None);
@@ -1665,7 +1665,7 @@ impl ChainSync {
 				if added_receipts > MAX_RECEIPTS_TO_SEND { break; }
 			}
 		}
-		debug!(target: "sync", ">>ETH_RECEIPTS {}", peer_id);
+		debug!(target: "sync", ">>ETH_RECEIPTS {}:{}", peer_id, io.peer_info(peer_id));
 		let mut rlp_result = RlpStream::new_list(added_headers);
 		rlp_result.append_raw(&data, added_headers);
 		Ok(Some((RECEIPTS_PACKET, rlp_result)))
@@ -2124,7 +2124,7 @@ impl ChainSync {
 			for (peer_id, sent, rlp) in lucky_peers {
 				peers.insert(peer_id);
 				self.send_packet(io, peer_id, TRANSACTIONS_PACKET, rlp);
-				debug!(target: "sync", ">>ETH_TXNS {} <- Transactions ({} entries)", peer_id, sent);
+				debug!(target: "sync", ">>ETH_TXNS {}:{} <- Transactions ({} entries)", peer_id, io.peer_info(peer_id), sent);
 				max_sent = max(max_sent, sent);
 			}
 			debug!(target: "sync", "Sent up to {} transactions to {} peers.", max_sent, lucky_peers_len);
