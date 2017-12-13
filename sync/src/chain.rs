@@ -499,8 +499,9 @@ impl ChainSync {
 	/// Remove peer from active peer set. Peer will be reactivated on the next sync
 	/// round.
 	fn deactivate_peer(&mut self, _io: &mut SyncIo, peer_id: PeerId) {
-		trace!(target: "sync", "Deactivating peer {}", peer_id);
+		debug!(target: "sync", "Deactivating peer {}", peer_id);
 		self.active_peers.remove(&peer_id);
+		debug!(target: "sync", "Peers {} | Active peers {}", self.peers.len(), self.active_peers.len());
 	}
 
 	fn maybe_start_snapshot_sync(&mut self, io: &mut SyncIo) {
@@ -596,75 +597,6 @@ impl ChainSync {
 				self.old_blocks = Some(downloader);
 			}
 		}
-	}
-
-	/// Called by peer to report status
-	fn on_peer_status(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &UntrustedRlp) -> Result<(), PacketDecodeError> {
-		self.handshaking_peers.remove(&peer_id);
-		let protocol_version: u8 = r.val_at(0)?;
-		let warp_protocol = io.protocol_version(&WARP_SYNC_PROTOCOL_ID, peer_id) != 0;
-		let peer = PeerInfo {
-			protocol_version: protocol_version,
-			network_id: r.val_at(1)?,
-			difficulty: Some(r.val_at(2)?),
-			latest_hash: r.val_at(3)?,
-			genesis: r.val_at(4)?,
-			asking: PeerAsking::Nothing,
-			asking_blocks: Vec::new(),
-			asking_hash: None,
-			ask_time: 0,
-			last_sent_transactions: HashSet::new(),
-			expired: false,
-			confirmation: if self.fork_block.is_none() { ForkConfirmation::Confirmed } else { ForkConfirmation::Unconfirmed },
-			asking_snapshot_data: None,
-			snapshot_hash: if warp_protocol { Some(r.val_at(5)?) } else { None },
-			snapshot_number: if warp_protocol { Some(r.val_at(6)?) } else { None },
-			block_set: None,
-		};
-
-		if self.sync_start_time.is_none() {
-			self.sync_start_time = Some(time::precise_time_ns());
-		}
-
-		debug!(target: "sync", "<<ETH_STATUS {} (protocol: {}, network: {:?}, difficulty: {:?}, latest:{}, genesis:{}, snapshot:{:?})",
-			peer_id, peer.protocol_version, peer.network_id, peer.difficulty, peer.latest_hash, peer.genesis, peer.snapshot_number);
-		if io.is_expired() {
-			trace!(target: "sync", "Status packet from expired session {}:{}", peer_id, io.peer_info(peer_id));
-			return Ok(());
-		}
-
-		if self.peers.contains_key(&peer_id) {
-			debug!(target: "sync", "Unexpected status packet from {}:{}", peer_id, io.peer_info(peer_id));
-			return Ok(());
-		}
-		let chain_info = io.chain().chain_info();
-		if peer.genesis != chain_info.genesis_hash {
-			io.disable_peer(peer_id);
-			trace!(target: "sync", "Peer {} genesis hash mismatch (ours: {}, theirs: {})", peer_id, chain_info.genesis_hash, peer.genesis);
-			return Ok(());
-		}
-		if peer.network_id != self.network_id {
-			io.disable_peer(peer_id);
-			trace!(target: "sync", "Peer {} network id mismatch (ours: {}, theirs: {})", peer_id, self.network_id, peer.network_id);
-			return Ok(());
-		}
-		if (warp_protocol && peer.protocol_version != PROTOCOL_VERSION_1 && peer.protocol_version != PROTOCOL_VERSION_2) || (!warp_protocol && peer.protocol_version != PROTOCOL_VERSION_63 && peer.protocol_version != PROTOCOL_VERSION_62) {
-			io.disable_peer(peer_id);
-			trace!(target: "sync", "Peer {} unsupported eth protocol ({})", peer_id, peer.protocol_version);
-			return Ok(());
-		}
-
-		self.peers.insert(peer_id.clone(), peer);
-		// Don't activate peer immediatelly when searching for common block.
-		// Let the current sync round complete first.
-		self.active_peers.insert(peer_id.clone());
-		debug!(target: "sync", "Connected {}:{}", peer_id, io.peer_info(peer_id));
-		if let Some((fork_block, _)) = self.fork_block {
-			self.request_fork_header_by_number(io, peer_id, fork_block);
-		} else {
-			self.sync_peer(io, peer_id, false);
-		}
-		Ok(())
 	}
 
 	#[cfg_attr(feature="dev", allow(cyclomatic_complexity, needless_borrow))]
@@ -949,6 +881,76 @@ impl ChainSync {
 		Ok(())
 	}
 
+	/// Called by peer to report status
+	fn on_peer_status(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &UntrustedRlp) -> Result<(), PacketDecodeError> {
+		self.handshaking_peers.remove(&peer_id);
+		let protocol_version: u8 = r.val_at(0)?;
+		let warp_protocol = io.protocol_version(&WARP_SYNC_PROTOCOL_ID, peer_id) != 0;
+		let peer = PeerInfo {
+			protocol_version: protocol_version,
+			network_id: r.val_at(1)?,
+			difficulty: Some(r.val_at(2)?),
+			latest_hash: r.val_at(3)?,
+			genesis: r.val_at(4)?,
+			asking: PeerAsking::Nothing,
+			asking_blocks: Vec::new(),
+			asking_hash: None,
+			ask_time: 0,
+			last_sent_transactions: HashSet::new(),
+			expired: false,
+			confirmation: if self.fork_block.is_none() { ForkConfirmation::Confirmed } else { ForkConfirmation::Unconfirmed },
+			asking_snapshot_data: None,
+			snapshot_hash: if warp_protocol { Some(r.val_at(5)?) } else { None },
+			snapshot_number: if warp_protocol { Some(r.val_at(6)?) } else { None },
+			block_set: None,
+		};
+
+		if self.sync_start_time.is_none() {
+			self.sync_start_time = Some(time::precise_time_ns());
+		}
+
+		debug!(target: "sync", "<<ETH_STATUS {} (protocol: {}, network: {:?}, difficulty: {:?}, latest:{}, genesis:{}, snapshot:{:?})",
+			   peer_id, peer.protocol_version, peer.network_id, peer.difficulty, peer.latest_hash, peer.genesis, peer.snapshot_number);
+		if io.is_expired() {
+			trace!(target: "sync", "Status packet from expired session {}:{}", peer_id, io.peer_info(peer_id));
+			return Ok(());
+		}
+
+		if self.peers.contains_key(&peer_id) {
+			debug!(target: "sync", "Unexpected status packet from {}:{}", peer_id, io.peer_info(peer_id));
+			return Ok(());
+		}
+		let chain_info = io.chain().chain_info();
+		if peer.genesis != chain_info.genesis_hash {
+			io.disable_peer(peer_id);
+			trace!(target: "sync", "Peer {} genesis hash mismatch (ours: {}, theirs: {})", peer_id, chain_info.genesis_hash, peer.genesis);
+			return Ok(());
+		}
+		if peer.network_id != self.network_id {
+			io.disable_peer(peer_id);
+			trace!(target: "sync", "Peer {} network id mismatch (ours: {}, theirs: {})", peer_id, self.network_id, peer.network_id);
+			return Ok(());
+		}
+		if (warp_protocol && peer.protocol_version != PROTOCOL_VERSION_1 && peer.protocol_version != PROTOCOL_VERSION_2) || (!warp_protocol && peer.protocol_version != PROTOCOL_VERSION_63 && peer.protocol_version != PROTOCOL_VERSION_62) {
+			io.disable_peer(peer_id);
+			trace!(target: "sync", "Peer {} unsupported eth protocol ({})", peer_id, peer.protocol_version);
+			return Ok(());
+		}
+
+		self.peers.insert(peer_id.clone(), peer);
+		// Don't activate peer immediatelly when searching for common block.
+		// Let the current sync round complete first.
+		self.active_peers.insert(peer_id.clone());
+		debug!(target: "sync", "Connected {}:{}", peer_id, io.peer_info(peer_id));
+		debug!(target: "sync", "Peers {}| Active peers {}", self.peers.len(), self.active_peers.len())
+		if let Some((fork_block, _)) = self.fork_block {
+			self.request_fork_header_by_number(io, peer_id, fork_block);
+		} else {
+			self.sync_peer(io, peer_id, false);
+		}
+		Ok(())
+	}
+
 	/// Handles `NewHashes` packet. Initiates headers download for any unknown hashes.
 	fn on_peer_new_hashes(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &UntrustedRlp) -> Result<(), PacketDecodeError> {
 		debug!(target: "sync", "<<ETH_NEW_BLOCK_HASHES {} -> NewHashes ({} entries)", peer_id, r.item_count()?);
@@ -1143,6 +1145,7 @@ impl ChainSync {
 			self.clear_peer_download(peer);
 			self.peers.remove(&peer);
 			self.active_peers.remove(&peer);
+			debug!(target: "sync", "Peers {} | Active peers {}", self.peers.len(), self.active_peers.len());
 			self.continue_sync(io);
 		}
 	}
