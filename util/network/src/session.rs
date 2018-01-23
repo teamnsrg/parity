@@ -405,16 +405,16 @@ impl Session {
 			PACKET_DISCONNECT => {
 				let rlp = UntrustedRlp::new(&packet.data[1..]);
 				let reason: u8 = rlp.val_at(0)?;
-				debug!(target:"network", "<<DEVP2P_DISC: {}: {:?}", self.token(), DisconnectReason::from_u8(reason));
+				debug!(target:"network", "<<DEVP2P_DISC {}: {:?}", self.token(), DisconnectReason::from_u8(reason));
 				Err(From::from(NetworkError::Disconnect(DisconnectReason::from_u8(reason))))
 			}
 			PACKET_PING => {
-				debug!(target:"network", "<<DEVP2P_PING: {} {:?}", self.token(), self.info.id);
+				debug!(target:"network", "<<DEVP2P_PING {} {:?}", self.token(), self.info.id);
 				self.send_pong(io)?;
 				Ok(SessionData::Continue)
 			},
 			PACKET_PONG => {
-				debug!(target:"network", "<<DEVP2P_PONG: {} {:?}", self.token(), self.info.id);
+				debug!(target:"network", "<<DEVP2P_PONG {} {:?}", self.token(), self.info.id);
 				let time = time::precise_time_ns();
 				self.pong_time_ns = Some(time);
 				self.info.ping_ms = Some((time - self.ping_time_ns) / 1000_000);
@@ -465,7 +465,7 @@ impl Session {
 			.append_list(&host.capabilities)
 			.append(&host.local_endpoint.address.port())
 			.append(host.id());
-		debug!(target: "network", ">>DEVP2P_HELLO: {:?} {} v{} {} {:?}", self.info.id, &host.client_version, &host.protocol_version, host.id(), &host.capabilities);
+		debug!(target: "network", ">>DEVP2P_HELLO {:?} {} v{} {} {:?}", self.info.id, &host.client_version, &host.protocol_version, host.id(), &host.capabilities);
 		self.send(io, rlp)
 	}
 
@@ -511,7 +511,7 @@ impl Session {
 			offset += caps[i].packet_count;
 			i += 1;
 		}
-		debug!(target: "network", "<<DEVP2P_HELLO: {} v{} {} {:?}", client_version, protocol, id, caps);
+		debug!(target: "network", "<<DEVP2P_HELLO {} v{} {} {:?}", client_version, protocol, id, caps);
 		let protocol = ::std::cmp::min(protocol, host.protocol_version);
 		self.info.protocol_version = protocol;
 		self.info.client_version = client_version;
@@ -531,7 +531,7 @@ impl Session {
 
 	/// Senf ping packet
 	pub fn send_ping<Message>(&mut self, io: &IoContext<Message>) -> Result<(), NetworkError> where Message: Send + Sync + Clone {
-		debug!(">>DEVP2P_PING: {:?}", self.id());
+		debug!(">>DEVP2P_PING {:?}", self.id());
 		self.send(io, Session::prepare(PACKET_PING)?)?;
 		self.ping_time_ns = time::precise_time_ns();
 		self.pong_time_ns = None;
@@ -539,7 +539,7 @@ impl Session {
 	}
 
 	fn send_pong<Message>(&mut self, io: &IoContext<Message>) -> Result<(), NetworkError> where Message: Send + Sync + Clone {
-		debug!(">>DEVP2P_PONG: {:?}", self.id());
+		debug!(">>DEVP2P_PONG {:?}", self.id());
 		self.send(io, Session::prepare(PACKET_PONG)?)
 	}
 
@@ -552,7 +552,7 @@ impl Session {
 			rlp.append(&(reason as u32));
 			self.send(io, rlp).ok();
 		}
-		debug!(">>DEVP2P_DISC: {:?}, {:?}", self.id(), reason);
+		debug!(">>DEVP2P_DISC {:?}, {:?}", self.id(), reason);
 		NetworkError::Disconnect(reason)
 	}
 
