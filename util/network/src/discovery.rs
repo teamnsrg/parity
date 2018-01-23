@@ -217,7 +217,7 @@ impl Discovery {
 				self.send_packet(PACKET_FIND_NODE, &r.endpoint.udp_address(), &rlp);
 				self.discovery_nodes.insert(r.id.clone());
 				tried_count += 1;
-				debug!(target: "discovery", ">>RLPX_FIND_NODE to {:?}", &r.endpoint);
+				debug!(target: "discovery", ">>RLPX_FINDNODE to {:?}", &r.endpoint);
 			}
 		}
 
@@ -447,7 +447,7 @@ impl Discovery {
 	}
 
 	fn on_find_node(&mut self, rlp: &UntrustedRlp, _node: &NodeId, from: &SocketAddr) -> Result<Option<TableUpdates>, NetworkError> {
-		debug!(target: "discovery", "<<RLPX_FIND_NODE from {:?}", &from);
+		debug!(target: "discovery", "<<RLPX_FINDNODE from {:?}", &from);
 		let target: NodeId = rlp.val_at(0)?;
 		let timestamp: u64 = rlp.val_at(1)?;
 		self.check_timestamp(timestamp)?;
@@ -459,7 +459,7 @@ impl Discovery {
 		for p in packets.drain(..) {
 			self.send_packet(PACKET_NEIGHBOURS, from, &p);
 		}
-		debug!(target: "discovery", ">>RLPX_NEIGHBOURS {} Neighbours to {:?}", nearest.len(), &from);
+		debug!(target: "discovery", ">>RLPX_NEIGHBORS {} Neighbours to {:?}", nearest.len(), &from);
 		Ok(None)
 	}
 
@@ -482,7 +482,7 @@ impl Discovery {
 	fn on_neighbours(&mut self, rlp: &UntrustedRlp, _node: &NodeId, from: &SocketAddr) -> Result<Option<TableUpdates>, NetworkError> {
 		// TODO: validate packet
 		let mut added = HashMap::new();
-		debug!(target: "discovery", "<<RLPX_NEIGHBOURS {} Neighbours from {:?}", rlp.at(0)?.item_count()?, &from);
+		debug!(target: "discovery", "<<RLPX_NEIGHBORS {} Neighbours from {:?}", rlp.at(0)?.item_count()?, &from);
 		for r in rlp.at(0)?.iter() {
 			let endpoint = NodeEndpoint::from_rlp(&r)?;
 			if !endpoint.is_valid() {
