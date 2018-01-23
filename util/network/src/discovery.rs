@@ -217,7 +217,7 @@ impl Discovery {
 				self.send_packet(PACKET_FIND_NODE, &r.endpoint.udp_address(), &rlp);
 				self.discovery_nodes.insert(r.id.clone());
 				tried_count += 1;
-				debug!(target: "discovery", ">>FINDNODE/v4 to {:?}", &r.endpoint);
+				debug!(target: "discovery", ">>RLPX_FINDNODE to {:?}", &r.endpoint);
 			}
 		}
 
@@ -248,7 +248,7 @@ impl Discovery {
 		rlp.append(&PROTOCOL_VERSION);
 		self.public_endpoint.to_rlp_list(&mut rlp);
 		node.to_rlp_list(&mut rlp);
-		debug!(target: "discovery", ">>PING/v4 to {:?}", &node);
+		debug!(target: "discovery", ">>RLPX_PING to {:?}", &node);
 		self.send_packet(PACKET_PING, &node.udp_address(), &rlp.drain());
 	}
 
@@ -404,7 +404,7 @@ impl Discovery {
 	}
 
 	fn on_ping(&mut self, rlp: &UntrustedRlp, node: &NodeId, from: &SocketAddr) -> Result<Option<TableUpdates>, NetworkError> {
-		debug!(target: "discovery", "<<PING/v4 from {:?}", &from);
+		debug!(target: "discovery", "<<RLPX_PING from {:?}", &from);
 		let source = NodeEndpoint::from_rlp(&rlp.at(1)?)?;
 		let dest = NodeEndpoint::from_rlp(&rlp.at(2)?)?;
 		let timestamp: u64 = rlp.val_at(3)?;
@@ -423,14 +423,14 @@ impl Discovery {
 		let mut response = RlpStream::new_list(2);
 		dest.to_rlp_list(&mut response);
 		response.append(&hash);
-		debug!(target: "discovery", ">>PONG/v4 to {:?}", &node);
+		debug!(target: "discovery", ">>RLPX_PONG to {:?}", &node);
 		self.send_packet(PACKET_PONG, from, &response.drain());
 
 		Ok(Some(TableUpdates { added: added_map, removed: HashSet::new() }))
 	}
 
 	fn on_pong(&mut self, rlp: &UntrustedRlp, node: &NodeId, from: &SocketAddr) -> Result<Option<TableUpdates>, NetworkError> {
-		debug!(target: "discovery", "<<PONG/v4 from {:?}", &from);
+		debug!(target: "discovery", "<<RLPX_PONG from {:?}", &from);
 		// TODO: validate pong packet
 		let dest = NodeEndpoint::from_rlp(&rlp.at(0)?)?;
 		let timestamp: u64 = rlp.val_at(2)?;
@@ -447,7 +447,7 @@ impl Discovery {
 	}
 
 	fn on_find_node(&mut self, rlp: &UntrustedRlp, _node: &NodeId, from: &SocketAddr) -> Result<Option<TableUpdates>, NetworkError> {
-		debug!(target: "discovery", "<<FINDNODE/v4 from {:?}", &from);
+		debug!(target: "discovery", "<<RLPX_FINDNODE from {:?}", &from);
 		let target: NodeId = rlp.val_at(0)?;
 		let timestamp: u64 = rlp.val_at(1)?;
 		self.check_timestamp(timestamp)?;
@@ -459,7 +459,7 @@ impl Discovery {
 		for p in packets.drain(..) {
 			self.send_packet(PACKET_NEIGHBOURS, from, &p);
 		}
-		debug!(target: "discovery", ">>NEIGHBORS/v4 {} Neighbours to {:?}", nearest.len(), &from);
+		debug!(target: "discovery", ">>RLPX_NEIGHBORS {} Neighbours to {:?}", nearest.len(), &from);
 		Ok(None)
 	}
 
@@ -482,7 +482,7 @@ impl Discovery {
 	fn on_neighbours(&mut self, rlp: &UntrustedRlp, _node: &NodeId, from: &SocketAddr) -> Result<Option<TableUpdates>, NetworkError> {
 		// TODO: validate packet
 		let mut added = HashMap::new();
-		debug!(target: "discovery", "<<NEIGHBORS/v4 {} Neighbours from {:?}", rlp.at(0)?.item_count()?, &from);
+		debug!(target: "discovery", "<<RLPX_NEIGHBORS {} Neighbours from {:?}", rlp.at(0)?.item_count()?, &from);
 		for r in rlp.at(0)?.iter() {
 			let endpoint = NodeEndpoint::from_rlp(&r)?;
 			if !endpoint.is_valid() {

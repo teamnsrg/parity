@@ -1471,6 +1471,7 @@ impl ChainSync {
 
 	/// Called when peer sends us new transactions
 	fn on_peer_transactions(&mut self, io: &mut SyncIo, peer_id: PeerId, r: &UntrustedRlp) -> Result<(), PacketDecodeError> {
+		debug!(target: "sync", "<<ETH_TX {}:{}", peer_id, io.peer_info(peer_id));
 		// Accept transactions only when fully synced
 		if !io.is_chain_queue_empty() || (self.state != SyncState::Idle && self.state != SyncState::NewBlocks) {
 			trace!(target: "sync", "{} Ignoring transactions while syncing", peer_id);
@@ -1482,7 +1483,6 @@ impl ChainSync {
 
 		let mut item_count = r.item_count()?;
 		trace!(target: "sync", "{:02} -> Transactions ({} entries)", peer_id, item_count);
-		debug!(target: "sync", "<<ETH_TX {}:{}", peer_id, io.peer_info(peer_id));
 		item_count = min(item_count, MAX_TX_TO_IMPORT);
 		let mut transactions = Vec::with_capacity(item_count);
 		for i in 0 .. item_count {
